@@ -1,155 +1,159 @@
 # Maus Droid Models
 
-Patch independente para integrar os modelos autorizados do **Factory Droid**
-ao **OpenMausBot**, com seleção de reasoning effort por modelo e multiplicadores
-de créditos nos nomes.
+English | [Português (Brasil)](README.pt-BR.md)
 
-Não é um fork completo do OpenMausBot, nem inclui o binário do Droid.
+A standalone patch that integrates authorized **Factory Droid** models into
+**OpenMausBot**, with per-model reasoning effort selection and credit multipliers
+in model names.
 
-## Funcionalidades
+This is not a full fork of OpenMausBot and does not include the Droid binary.
 
-- Consulta `droid.list_models` usando a conta já autenticada no Droid.
-- Exclui modelos bloqueados, sem permitir reintroduzi-los pelas configurações.
-- Preserva modelos personalizados, favoritos e o modelo padrão permitido.
-- Reutiliza o último catálogo válido da instância se uma consulta falhar.
-- Acrescenta multiplicadores como `Inkling · 0.4x` e `GLM-5.3-Flash · 0.06x`.
-- Mostra `Dynamic` para o roteador automático, sem estimar preços de modelos personalizados.
-- Usa as variantes existentes da interface para os níveis de effort anunciados por cada modelo.
-- Seleciona modelo e effort pelo ACP, confirmando a configuração antes do prompt.
-- Preserva a seleção de modelo nas chamadas de memória em segundo plano.
+## Features
 
-A quantidade de modelos e os multiplicadores vêm do Droid. Não há uma lista
-fixa de modelos autorizados neste projeto. O multiplicador é uma referência
-relativa, **não o custo final de uma mensagem**.
+- Queries `droid.list_models` using the account already signed in to Droid.
+- Filters out blocked models and prevents settings from reintroducing them.
+- Preserves custom models, favorites, and the configured default when allowed.
+- Reuses the instance's last valid catalog if a query fails.
+- Adds multipliers such as `Inkling · 0.4x` and `GLM-5.3-Flash · 0.06x`.
+- Displays `Dynamic` for automatic routing, without estimating prices for custom models.
+- Uses the existing variant picker for the effort levels advertised by each model.
+- Selects the model and effort over ACP, confirming the settings before the prompt.
+- Preserves model selection for background memory calls.
 
-## Compatibilidade e requisitos
+The model count and multipliers come from Droid. This project does not maintain
+a fixed list of authorized models. The multiplier is a relative reference,
+**not the final cost of a message**.
 
-Validado com **OpenMausBot 0.1.110**, **Droid 0.243.0** e **Node.js 24** no Linux.
+## Compatibility and requirements
 
-Requer `python3`, GNU `patch`, `node` e uma instalação do OpenMausBot.
-Para consultar modelos ou gerar respostas reais, o Droid precisa estar instalado
-e autenticado. O projeto não inclui nem pede suas credenciais.
+Validated with **OpenMausBot 0.1.110**, **Droid 0.243.0**, and **Node.js 24** on Linux.
 
-O patch altera apenas:
+Requires `python3`, GNU `patch`, `node`, and an OpenMausBot installation.
+Droid must be installed and authenticated to query models or generate real
+responses. This project does not include or ask for your credentials.
 
-- `dist-server/index.js`, o bundle executado pelo servidor.
-- `dist-server/server/drivers/acp/droid.js`, o driver equivalente.
+The patch only changes:
 
-Não altera frontend, configurações, cache ou autenticação. Não reinicia o servidor.
+- `dist-server/index.js`, the bundle executed by the server.
+- `dist-server/server/drivers/acp/droid.js`, the equivalent driver.
 
-## Instalar ou reaplicar após uma atualização
+It does not change the frontend, settings, cache, or authentication. It does not
+restart the server.
 
-Clone fora do diretório do pacote npm, para não perder o patch em atualizações:
+## Install or reapply after an update
+
+Clone outside the npm package directory so updates do not remove the patch:
 
 ```sh
 git clone https://github.com/soaresfellipe/maus-droid-models.git
 cd maus-droid-models
 ```
 
-O diretório padrão é `~/.local/lib/node_modules/openmausbot`:
+The default installation directory is `~/.local/lib/node_modules/openmausbot`:
 
 ```sh
 python3 reapply.py --check
 python3 reapply.py
 ```
 
-Se o npm global usa outro local:
+If your global npm installation uses a different location:
 
 ```sh
 python3 reapply.py --root "$(npm root -g)/openmausbot" --check
 python3 reapply.py --root "$(npm root -g)/openmausbot"
 ```
 
-Depois, reinicie o OpenMausBot quando puder interromper as conversas e atualize
-os modelos do Droid na interface. O seletor deve mostrar os multiplicadores e
-as opções de effort do modelo selecionado.
+Then restart OpenMausBot when you can interrupt conversations and refresh
+Droid's models in the UI. The picker should show the multipliers and the effort
+options for the selected model.
 
-Execute novamente o reaplicador após atualizar o pacote npm. **Não force o patch**
-se uma versão futura já tiver resolvido o problema ou mudado o driver.
+Run the reapplier again after updating the npm package. **Do not force the patch**
+if a future release has already fixed the issue or changed the driver.
 
-## Segurança da reaplicação
+## Safe reapplication
 
-- Aplica primeiro em cópias temporárias e valida ambos os arquivos com `node --check`.
-- Aceita deslocamentos de linhas, mas não diferenças de contexto (`--fuzz=0`).
-- Não modifica a instalação com `--check` nem quando o patch completo já está aplicado.
-- Interrompe diante de código incompatível, aplicação parcial ou sintaxe inválida.
-- Confere se os arquivos mudaram durante a operação.
-- Cria backups com data UTC antes de substituir os arquivos.
-- Tenta restaurar o primeiro arquivo se a escrita do segundo falhar.
+- Applies to temporary copies first and validates both files with `node --check`.
+- Accepts line offsets, but not context differences (`--fuzz=0`).
+- Leaves the installation unchanged with `--check` or when the full patch is already applied.
+- Stops on incompatible code, a partial application, or invalid syntax.
+- Checks whether files have changed during the operation.
+- Creates timestamped UTC backups before replacing files.
+- Attempts to restore the first file if writing the second one fails.
 
-Cada substituição é atômica, mas os dois arquivos não formam uma transação única.
-Se outro processo modificar um arquivo durante o rollback, o reaplicador preserva
-essa alteração e informa que a restauração precisa ser manual. Não rode junto de
-uma atualização npm.
+Each replacement is atomic, but the two files do not form a single transaction.
+If another process changes a file during rollback, the reapplier preserves that
+change and reports that manual restoration is required. Do not run it alongside
+an npm update.
 
-Uma instalação com somente a versão anterior deste patch, que tratava apenas do
-catálogo, não é reconhecida como aplicação completa. O reaplicador para sem
-alterar os arquivos. Após uma atualização npm que restaure os arquivos originais,
-ele pode aplicar o patch completo.
+An installation with only the earlier, catalog-only version of this patch is
+not recognized as fully patched. The reapplier stops without changing any files.
+After an npm update restores the original files, it can apply the complete patch.
 
-## Testes
+## Tests
 
-Os sete testes do reaplicador usam apenas fixtures em diretórios temporários:
+The seven reapplier tests use only fixtures in temporary directories:
 
 ```sh
 python3 test_reapply.py
 ```
 
-Os testes Node leem uma instalação **já corrigida** do OpenMausBot. O diretório
-padrão é o mesmo do reaplicador; para outro local, defina `OPENMAUSBOT_ROOT`:
+The Node tests read an **already patched** OpenMausBot installation. They use
+the same default directory as the reapplier. For another location, set
+`OPENMAUSBOT_ROOT`:
 
 ```sh
 node --test tests/models.test.mjs tests/metadata.integration.test.mjs
 
-# Alternativa para uma instalação global em outro local:
+# Alternative for a global installation in another location:
 OPENMAUSBOT_ROOT="$(npm root -g)/openmausbot" \
   node --test tests/models.test.mjs tests/metadata.integration.test.mjs
 ```
 
-Por padrão, esses testes não consultam a conta nem geram respostas reais.
-A integração usa o driver extraído do próprio bundle e um CLI simulado,
-sem iniciar outro servidor. Esse recorte depende da estrutura do bundle da
-versão validada.
+By default, these tests do not query the account or generate real responses.
+The integration test uses the driver extracted from the bundle and a simulated
+CLI, without starting another server. This extraction depends on the bundle
+structure of the validated version.
 
-### Testes reais opcionais
+### Optional live tests
 
-**Podem consumir créditos.** Usam a autenticação local existente, sem gravá-la
-no repositório. O executável padrão é `droid`; use `DROID_CLI` para outro caminho.
+**These may consume credits.** They use the existing local authentication
+without saving it in the repository. The default executable is `droid`; use
+`DROID_CLI` for a different path.
 
 ```sh
 DROID_MODELS_LIVE=1 node --test tests/models.test.mjs
 DROID_METADATA_LIVE=1 node --test tests/metadata.integration.test.mjs
 ```
 
-Foram confirmados `low` e `high` do Inkling pelo protocolo ACP, com respostas
-reais e troca de effort na mesma sessão. Os testes também cobrem filtros,
-multiplicadores, modelos personalizados, falhas, isolamento de instâncias,
-reaplicação idempotente e rejeição de variantes não anunciadas.
+Inkling's `low` and `high` levels were confirmed over ACP, with real responses
+and effort changes within the same session. The tests also cover filtering,
+multipliers, custom models, failures, instance isolation, idempotent
+reapplication, and rejection of variants that are not advertised.
 
-Não publique `.factory`, `.openmausbot`, `.env`, logs, cache ou credenciais.
-Esses dados não fazem parte do projeto.
+Do not publish `.factory`, `.openmausbot`, `.env`, logs, cache, or credentials.
+These are not part of the project.
 
-## Limitação conhecida do Droid
+## Known Droid limitation
 
-No Droid **0.243.0**, o Inkling anuncia `minimal` e aceita esse valor na
-configuração ACP, mas o backend pode rejeitá-lo ao gerar a resposta. A rejeição
-foi reproduzida diretamente no Droid, sem o OpenMausBot. `low` e `high` foram
-confirmados em respostas reais.
+In Droid **0.243.0**, Inkling advertises `minimal` and accepts that value in its
+ACP configuration, but the backend may reject it when generating a response.
+This rejection was reproduced directly in Droid, without OpenMausBot. `low`
+and `high` were confirmed with real responses.
 
-O patch mostra os níveis anunciados pelo Droid e **não troca silenciosamente**
-um nível rejeitado por outro. Não foram testados todos os níveis de todos os
-modelos.
+The patch displays the levels advertised by Droid and **does not silently
+substitute another level** when one is rejected. Not every level of every model
+has been tested.
 
-## Reverter
+## Revert
 
-Restaure **os dois backups da mesma execução**, nos caminhos impressos pelo
-reaplicador, e reinicie o servidor. Use backups da versão atualmente instalada,
-não de uma versão anterior do OpenMausBot.
+Restore **both backups from the same run**, using the paths printed by the
+reapplier, then restart the server. Use backups from the currently installed
+version, not from an older OpenMausBot release.
 
-## Licença e origem
+## License and attribution
 
-Apache-2.0. O patch e as fixtures de referência derivam do driver do
-[OpenMausBot](https://github.com/milind-soni/OpenMausBot), distribuído sob
-Apache-2.0. Consulte `LICENSE` e `NOTICE`.
+Apache-2.0. The patch and reference fixtures are derived from the
+[OpenMausBot](https://github.com/milind-soni/OpenMausBot) driver, distributed under
+Apache-2.0. See `LICENSE` and `NOTICE`.
 
-Projeto independente, sem vínculo oficial com o OpenMausBot ou a Factory.
+This is an independent project, not officially affiliated with OpenMausBot or Factory.
