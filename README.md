@@ -1,4 +1,13 @@
+<div align="center">
+
 # Maus Droid Models
+
+**Authorized Droid models, per-model reasoning effort, and credit multipliers
+for OpenMausBot — in your own chat app.**
+
+[Features](#features) · [Install](#install-or-reapply-after-an-update) · [Tests](#tests) · [Limitations](#known-droid-limitation) · [License](#license-and-attribution)
+
+![License](https://img.shields.io/badge/license-Apache--2.0-blue) ![OpenMausBot](https://img.shields.io/badge/validated_with-OpenMausBot_0.1.110-8a2be2) ![Droid](https://img.shields.io/badge/validated_with-Droid_0.243.0-4c8bf5) ![Node](https://img.shields.io/badge/node-24+-3c873a)
 
 English | [Português (Brasil)](README.pt-BR.md)
 
@@ -7,6 +16,8 @@ A standalone patch that integrates authorized **Factory Droid** models into
 in model names.
 
 This is not a full fork of OpenMausBot and does not include the Droid binary.
+
+</div>
 
 ## Features
 

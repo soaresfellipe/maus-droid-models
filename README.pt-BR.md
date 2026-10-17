@@ -1,4 +1,13 @@
+<div align="center">
+
 # Maus Droid Models
+
+**Modelos autorizados do Droid, reasoning effort por modelo e multiplicadores
+de créditos para o OpenMausBot — no seu próprio app de chat.**
+
+[Funcionalidades](#funcionalidades) · [Instalar](#instalar-ou-reaplicar-após-uma-atualização) · [Testes](#testes) · [Limitações](#limitação-conhecida-do-droid) · [Licença](#licença-e-origem)
+
+![Licença](https://img.shields.io/badge/licença-Apache--2.0-blue) ![OpenMausBot](https://img.shields.io/badge/validado_com-OpenMausBot_0.1.110-8a2be2) ![Droid](https://img.shields.io/badge/validado_com-Droid_0.243.0-4c8bf5) ![Node](https://img.shields.io/badge/node-24+-3c873a)
 
 [English](README.md) | Português (Brasil)
 
@@ -7,6 +16,8 @@ ao **OpenMausBot**, com seleção de reasoning effort por modelo e multiplicador
 de créditos nos nomes.
 
 Não é um fork completo do OpenMausBot, nem inclui o binário do Droid.
+
+</div>
 
 ## Funcionalidades
 
