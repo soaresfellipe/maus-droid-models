@@ -1,0 +1,364 @@
+--- a/dist-server/index.js
++++ b/dist-server/index.js
+@@ -163142,6 +163142,7 @@
+ var KimiAgentDriver = createAcpDriver(support4);
+ 
+ // server/drivers/acp/droid.ts
++import { createInterface as createDroidModelLines } from "node:readline";
+ import { existsSync as existsSync24, mkdirSync as mkdirSync33, readFileSync as readFileSync44, writeFileSync as writeFileSync16 } from "node:fs";
+ import { join as join65 } from "node:path";
+ var AUTH_FILES = ["auth.v2.file", "auth.v2.loginkeychain", "auth.v2.keyring"];
+@@ -163204,28 +163205,120 @@
+ function readSettings(env) {
+   return JSON.parse(readFileSync44(join65(env.FACTORY_HOME_OVERRIDE || userHome(env), ".factory", "settings.json"), "utf8"));
+ }
+-async function resolveModels(env) {
+-  let catalog = MODELS2;
+-  try {
+-    const settings = readSettings(env);
+-    const custom21 = (settings.customModels ?? []).flatMap((m5) => {
+-      if (m5.id?.startsWith(INJECT_ID_PREFIX)) return [];
+-      const id3 = m5.id || (m5.model ? `custom:${m5.model}` : "");
+-      if (!id3) return [];
+-      return [{ id: id3, label: m5.displayName || m5.model || id3, custom: true }];
+-    });
+-    const merged = [...custom21, ...MODELS2.options.filter((o) => !custom21.some((c3) => c3.id === o.id))];
+-    const rank3 = new Map((settings.modelFavorites ?? []).map((id3, i) => [id3, i]));
+-    const options2 = merged.sort((a3, b11) => (rank3.get(a3.id) ?? Infinity) - (rank3.get(b11.id) ?? Infinity));
+-    const configured2 = settings.sessionDefaultSettings?.model;
+-    const fallback2 = options2[0]?.id ?? MODELS2.default;
+-    catalog = {
+-      default: configured2 && options2.some((o) => o.id === configured2) ? configured2 : fallback2,
+-      options: options2
++const lastDroidModels = new Map();
++function droidModelOption(model) {
++    const multiplier = model.tokenMultiplier;
++    const suffix = model.isCustom ? "" : model.kind === "router" ? " · Dynamic"
++        : typeof multiplier === "number" && Number.isFinite(multiplier) && multiplier >= 0 ? ` · ${multiplier}x` : "";
++    const efforts = [...new Set((Array.isArray(model.supportedReasoningEfforts) ? model.supportedReasoningEfforts : [])
++        .filter((effort) => typeof effort === "string" && /^[a-z][a-z-]*$/.test(effort)))];
++    const labels = { none: "None", off: "Off", dynamic: "Dynamic", minimal: "Minimal", low: "Low",
++        medium: "Medium", high: "High", xhigh: "Extra High", max: "Maximum" };
++    return {
++        id: model.id,
++        label: `${model.displayName}${suffix}`,
++        ...(model.isCustom ? { custom: true } : {}),
++        ...(efforts.length ? { variants: efforts.map((id) => ({ id, label: labels[id] ?? id })) } : {}),
+     };
+-  } catch {
+-  }
+-  return mergeLocalInject(catalog, env);
++}
++async function fetchDroidModels(env, cli) {
++    const id = "openmausbot-list-models";
++    const child = spawnCli(cli, ["exec", "--input-format", "stream-jsonrpc", "--output-format", "stream-jsonrpc"], {
++        env,
++        stdio: ["pipe", "pipe", "ignore"],
++    });
++    const lines = createDroidModelLines({ input: child.stdout });
++    let timer;
++    try {
++        return await new Promise((resolve, reject) => {
++            timer = setTimeout(() => reject(new Error("Droid model query timed out after 15 seconds")), 15_000);
++            child.once("error", reject);
++            child.once("close", () => reject(new Error("Droid exited before returning its models")));
++            child.stdin.on("error", reject);
++            lines.on("line", (line) => {
++                let response;
++                try {
++                    response = JSON.parse(line);
++                }
++                catch {
++                    return;
++                }
++                if (response?.id !== id)
++                    return;
++                if (response.error) {
++                    reject(new Error("Droid rejected the model query"));
++                    return;
++                }
++                const models = response.result?.models;
++                if (!Array.isArray(models) || models.some((model) => !model || typeof model.id !== "string" || !model.id || typeof model.displayName !== "string")) {
++                    reject(new Error("Droid returned an invalid model catalog"));
++                    return;
++                }
++                resolve(models);
++            });
++            child.stdin.write(`${JSON.stringify({
++                factoryApiVersion: "1.0.0",
++                factoryProtocolVersion: "1.201.1",
++                type: "request",
++                jsonrpc: "2.0",
++                id,
++                method: "droid.list_models",
++                params: { includeDisabled: true },
++            })}\n`);
++        });
++    }
++    finally {
++        clearTimeout(timer);
++        lines.close();
++        child.stdin.destroy();
++        await killCliTree(child);
++    }
++}
++async function resolveModels(env, config = {}, instanceId) {
++    const cacheKey = instanceId ?? config;
++    let models;
++    try {
++        models = await fetchDroidModels(env, config.cli || "droid");
++        if (!models.some((model) => model.disabled !== true))
++            throw new Error("Droid returned no available models");
++        lastDroidModels.set(cacheKey, models);
++    }
++    catch (error) {
++        models = lastDroidModels.get(cacheKey);
++        if (!models)
++            throw error;
++    }
++    const disabled = new Set(models.filter((model) => model.disabled === true).map((model) => model.id));
++    const available = models.filter((model) => !disabled.has(model.id)).map(droidModelOption);
++    let settings = {};
++    try {
++        settings = readSettings(env) ?? {};
++    }
++    catch { }
++    const custom = (Array.isArray(settings.customModels) ? settings.customModels : []).flatMap((model) => {
++        if (model.id?.startsWith(INJECT_ID_PREFIX))
++            return [];
++        const id = model.id || (model.model ? `custom:${model.model}` : "");
++        if (!id || disabled.has(id))
++            return [];
++        const native = available.find((option) => option.id === id);
++        return [{ ...native, id, label: model.displayName || model.model || id, custom: true }];
++    });
++    const seen = new Set();
++    const merged = [...custom, ...available].filter((model) => {
++        if (seen.has(model.id))
++            return false;
++        seen.add(model.id);
++        return true;
++    });
++    const rank = new Map((Array.isArray(settings.modelFavorites) ? settings.modelFavorites : []).map((id, i) => [id, i]));
++    const options = merged.sort((a, b) => (rank.get(a.id) ?? Infinity) - (rank.get(b.id) ?? Infinity));
++    const configured = settings.sessionDefaultSettings?.model;
++    const fallback = options.some((model) => model.id === "auto") ? "auto" : options[0].id;
++    return mergeLocalInject({
++        default: configured && options.some((model) => model.id === configured) ? configured : fallback,
++        options,
++    }, env);
+ }
+ async function applySetting(request6, method2, params2, what) {
+   try {
+@@ -163239,7 +163332,7 @@
+ var MODE_DEFAULT = "normal";
+ var MODE_FULL_AUTO = "auto-high";
+ var MODELS2 = {
+-  default: "claude-opus-5",
++  default: "auto",
+   options: [
+     { id: "auto", label: "Auto (Factory picks)" },
+     { id: "claude-opus-5", label: "Claude Opus 5" },
+@@ -163257,6 +163350,8 @@
+   driverKind: "droidAgent",
+   displayName: "Droid",
+   models: MODELS2,
++  selectModel: { configId: "model" },
++  modelVariants: true,
+   defaultCli: "droid",
+   nativeSource: "droid.acp",
+   loginNote: "Droid CLI is not signed in \u2014 run `droid` once and log in, or set FACTORY_API_KEY",
+@@ -163283,8 +163378,9 @@
+   async configureSession({ request: request6, sessionId, config: config2, turn }) {
+     const modeId = config2.fullAuto ? MODE_FULL_AUTO : MODE_DEFAULT;
+     await applySetting(request6, "session/set_mode", { sessionId, modeId }, `autonomy mode "${modeId}"`);
+-    const modelId = turn.model ?? MODELS2.default;
+-    await applySetting(request6, "session/set_model", { sessionId, modelId }, `model "${modelId}"`);
++    // Normal turns use selectModel; background memory calls still need the fallback.
++    if (!turn.model)
++      await applySetting(request6, "session/set_model", { sessionId, modelId: MODELS2.default }, `model "${MODELS2.default}"`);
+   },
+   buildPromptText: (turn) => turn.system ? `${turn.system}
+ 
+--- a/dist-server/server/drivers/acp/droid.js
++++ b/dist-server/server/drivers/acp/droid.js
+@@ -4,6 +4,8 @@
+ // --disable-builtin-skills are still validated, but session settings come from JSON-RPC requests."
+ // So model and autonomy are set over the wire in configureSession (verified on droid 0.196.0).
+ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
++import { createInterface as createDroidModelLines } from "node:readline";
++import { killCliTree, spawnCli } from "../../procs.js";
+ import { join } from "node:path";
+ import { userHome } from "../../env-path.js";
+ import { decodeInjectId, hostApiKey, localHost, mergeLocalInject } from "../local-inject.js";
+@@ -78,30 +80,120 @@
+ function readSettings(env) {
+     return JSON.parse(readFileSync(join(env.FACTORY_HOME_OVERRIDE || userHome(env), ".factory", "settings.json"), "utf8"));
+ }
+-async function resolveModels(env) {
+-    let catalog = MODELS;
++const lastDroidModels = new Map();
++function droidModelOption(model) {
++    const multiplier = model.tokenMultiplier;
++    const suffix = model.isCustom ? "" : model.kind === "router" ? " · Dynamic"
++        : typeof multiplier === "number" && Number.isFinite(multiplier) && multiplier >= 0 ? ` · ${multiplier}x` : "";
++    const efforts = [...new Set((Array.isArray(model.supportedReasoningEfforts) ? model.supportedReasoningEfforts : [])
++        .filter((effort) => typeof effort === "string" && /^[a-z][a-z-]*$/.test(effort)))];
++    const labels = { none: "None", off: "Off", dynamic: "Dynamic", minimal: "Minimal", low: "Low",
++        medium: "Medium", high: "High", xhigh: "Extra High", max: "Maximum" };
++    return {
++        id: model.id,
++        label: `${model.displayName}${suffix}`,
++        ...(model.isCustom ? { custom: true } : {}),
++        ...(efforts.length ? { variants: efforts.map((id) => ({ id, label: labels[id] ?? id })) } : {}),
++    };
++}
++async function fetchDroidModels(env, cli) {
++    const id = "openmausbot-list-models";
++    const child = spawnCli(cli, ["exec", "--input-format", "stream-jsonrpc", "--output-format", "stream-jsonrpc"], {
++        env,
++        stdio: ["pipe", "pipe", "ignore"],
++    });
++    const lines = createDroidModelLines({ input: child.stdout });
++    let timer;
+     try {
+-        const settings = readSettings(env);
+-        const custom = (settings.customModels ?? []).flatMap((m) => {
+-            if (m.id?.startsWith(INJECT_ID_PREFIX))
+-                return [];
+-            const id = m.id || (m.model ? `custom:${m.model}` : "");
+-            if (!id)
+-                return [];
+-            return [{ id, label: m.displayName || m.model || id, custom: true }];
++        return await new Promise((resolve, reject) => {
++            timer = setTimeout(() => reject(new Error("Droid model query timed out after 15 seconds")), 15_000);
++            child.once("error", reject);
++            child.once("close", () => reject(new Error("Droid exited before returning its models")));
++            child.stdin.on("error", reject);
++            lines.on("line", (line) => {
++                let response;
++                try {
++                    response = JSON.parse(line);
++                }
++                catch {
++                    return;
++                }
++                if (response?.id !== id)
++                    return;
++                if (response.error) {
++                    reject(new Error("Droid rejected the model query"));
++                    return;
++                }
++                const models = response.result?.models;
++                if (!Array.isArray(models) || models.some((model) => !model || typeof model.id !== "string" || !model.id || typeof model.displayName !== "string")) {
++                    reject(new Error("Droid returned an invalid model catalog"));
++                    return;
++                }
++                resolve(models);
++            });
++            child.stdin.write(`${JSON.stringify({
++                factoryApiVersion: "1.0.0",
++                factoryProtocolVersion: "1.201.1",
++                type: "request",
++                jsonrpc: "2.0",
++                id,
++                method: "droid.list_models",
++                params: { includeDisabled: true },
++            })}\n`);
+         });
+-        const merged = [...custom, ...MODELS.options.filter((o) => !custom.some((c) => c.id === o.id))];
+-        const rank = new Map((settings.modelFavorites ?? []).map((id, i) => [id, i]));
+-        const options = merged.sort((a, b) => (rank.get(a.id) ?? Infinity) - (rank.get(b.id) ?? Infinity));
+-        const configured = settings.sessionDefaultSettings?.model;
+-        const fallback = options[0]?.id ?? MODELS.default;
+-        catalog = {
+-            default: configured && options.some((o) => o.id === configured) ? configured : fallback,
+-            options,
+-        };
++    }
++    finally {
++        clearTimeout(timer);
++        lines.close();
++        child.stdin.destroy();
++        await killCliTree(child);
++    }
++}
++async function resolveModels(env, config = {}, instanceId) {
++    const cacheKey = instanceId ?? config;
++    let models;
++    try {
++        models = await fetchDroidModels(env, config.cli || "droid");
++        if (!models.some((model) => model.disabled !== true))
++            throw new Error("Droid returned no available models");
++        lastDroidModels.set(cacheKey, models);
++    }
++    catch (error) {
++        models = lastDroidModels.get(cacheKey);
++        if (!models)
++            throw error;
++    }
++    const disabled = new Set(models.filter((model) => model.disabled === true).map((model) => model.id));
++    const available = models.filter((model) => !disabled.has(model.id)).map(droidModelOption);
++    let settings = {};
++    try {
++        settings = readSettings(env) ?? {};
+     }
+     catch { }
+-    return mergeLocalInject(catalog, env);
++    const custom = (Array.isArray(settings.customModels) ? settings.customModels : []).flatMap((model) => {
++        if (model.id?.startsWith(INJECT_ID_PREFIX))
++            return [];
++        const id = model.id || (model.model ? `custom:${model.model}` : "");
++        if (!id || disabled.has(id))
++            return [];
++        const native = available.find((option) => option.id === id);
++        return [{ ...native, id, label: model.displayName || model.model || id, custom: true }];
++    });
++    const seen = new Set();
++    const merged = [...custom, ...available].filter((model) => {
++        if (seen.has(model.id))
++            return false;
++        seen.add(model.id);
++        return true;
++    });
++    const rank = new Map((Array.isArray(settings.modelFavorites) ? settings.modelFavorites : []).map((id, i) => [id, i]));
++    const options = merged.sort((a, b) => (rank.get(a.id) ?? Infinity) - (rank.get(b.id) ?? Infinity));
++    const configured = settings.sessionDefaultSettings?.model;
++    const fallback = options.some((model) => model.id === "auto") ? "auto" : options[0].id;
++    return mergeLocalInject({
++        default: configured && options.some((model) => model.id === configured) ? configured : fallback,
++        options,
++    }, env);
+ }
+ // droid rejects a setting with a bare message ("Model not recognized") naming neither engine nor setting.
+ async function applySetting(request, method, params, what) {
+@@ -119,7 +211,7 @@
+ const MODE_FULL_AUTO = "auto-high";
+ // A curated slice of `droid exec -m <bogus>`'s built-in catalog (0.196.0 lists 43).
+ const MODELS = {
+-    default: "claude-opus-5",
++    default: "auto",
+     options: [
+         { id: "auto", label: "Auto (Factory picks)" },
+         { id: "claude-opus-5", label: "Claude Opus 5" },
+@@ -137,6 +229,8 @@
+     driverKind: "droidAgent",
+     displayName: "Droid",
+     models: MODELS,
++    selectModel: { configId: "model" },
++    modelVariants: true,
+     defaultCli: "droid",
+     nativeSource: "droid.acp",
+     loginNote: "Droid CLI is not signed in — run `droid` once and log in, or set FACTORY_API_KEY",
+@@ -163,8 +257,9 @@
+     async configureSession({ request, sessionId, config, turn }) {
+         const modeId = config.fullAuto ? MODE_FULL_AUTO : MODE_DEFAULT;
+         await applySetting(request, "session/set_mode", { sessionId, modeId }, `autonomy mode "${modeId}"`);
+-        const modelId = turn.model ?? MODELS.default;
+-        await applySetting(request, "session/set_model", { sessionId, modelId }, `model "${modelId}"`);
++        // Normal turns use selectModel; background memory calls still need the fallback.
++        if (!turn.model)
++            await applySetting(request, "session/set_model", { sessionId, modelId: MODELS.default }, `model "${MODELS.default}"`);
+     },
+     buildPromptText: (turn) => (turn.system ? `${turn.system}\n\n${turn.text}` : turn.text),
+ };

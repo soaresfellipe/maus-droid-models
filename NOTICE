@@ -1,0 +1,18 @@
+Maus Droid Models
+
+This project includes an integration patch and unmodified Droid driver
+reference fixtures derived from OpenMausBot 0.1.110:
+https://github.com/milind-soni/OpenMausBot
+
+OpenMausBot is distributed under the Apache License, Version 2.0.
+Upstream copyrights and attribution remain with their respective owners.
+
+The integration changes are distributed in droid-models.patch. They add
+account-authorized model discovery, reasoning-effort variants, credit
+multipliers in model labels, and an automatic-model fallback.
+
+fixtures/droid.js and fixtures/index.js are unmodified upstream driver
+reference code used to validate patch application. fixtures/droid-acp.mjs
+is a simulated CLI for tests.
+
+This independent project is not affiliated with Factory or OpenMausBot.

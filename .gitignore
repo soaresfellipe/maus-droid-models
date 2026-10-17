@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+node_modules/
+.env
+.env.*
+!.env.example
+.factory/
+.openmausbot/
+*.bak*
+*.log
+*.ndjson
