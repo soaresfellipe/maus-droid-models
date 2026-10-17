@@ -11,6 +11,8 @@ de créditos para o OpenMausBot — no seu próprio app de chat.**
 
 [English](README.md) | Português (Brasil)
 
+<img src="assets/model-picker.png" alt="Seletor de modelos do OpenMausBot com multiplicadores e a opção de reasoning effort" width="420">
+
 Patch independente para integrar os modelos autorizados do **Factory Droid**
 ao **OpenMausBot**, com seleção de reasoning effort por modelo e multiplicadores
 de créditos nos nomes.

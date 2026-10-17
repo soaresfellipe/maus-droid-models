@@ -11,6 +11,8 @@ for OpenMausBot — in your own chat app.**
 
 English | [Português (Brasil)](README.pt-BR.md)
 
+<img src="assets/model-picker.png" alt="OpenMausBot model picker showing Droid models with multipliers and a reasoning effort selector" width="420">
+
 A standalone patch that integrates authorized **Factory Droid** models into
 **OpenMausBot**, with per-model reasoning effort selection and credit multipliers
 in model names.
